@@ -13,6 +13,30 @@ import pandas as pd
 random.seed(8888)
 NUll_num = 0
 
+BLOOM_LABELS = ("remember", "understand", "apply", "analyze", "evaluate")
+BLOOM_ALIASES = {
+    "analyse": "analyze",
+    "analysis": "analyze",
+}
+BLOOM_LANG_MAP = {
+    "ind": "indo",
+}
+
+
+def normalize_label(label):
+    return str(label or "").strip().lower()
+
+
+def normalize_bloom_label(label):
+    normalized = normalize_label(label)
+    return BLOOM_ALIASES.get(normalized, normalized)
+
+
+def bloom_taxo_path(dataset_dir, lang):
+    dataset_lang = BLOOM_LANG_MAP.get(lang, lang)
+    return os.path.join(dataset_dir, f"bloom_tax_labels_{dataset_lang}.json")
+
+
 gsm8k_prompt_template = """As an expert problem solver, solve step by step the following mathematical questions.
 
   Q: There are 15 trees in the grove. Grove workers will plant trees in the grove today. After they are done, there will be 21 trees. How many trees did the grove workers plant today?
@@ -42,32 +66,50 @@ gsm8k_prompt_template = """As an expert problem solver, solve step by step the f
   Q: {TARGET_QUESTION}
   A: Let's think step by step. """
 
-def load_prompt_template(ds_name, dataset_dir):
+def load_prompt_template(ds_name, dataset_dir, reasonmem_lang="en"):
   
   if ds_name in ['GSM8k', 'GSM-symbolic', "MGSM"]:
 
     template = gsm8k_prompt_template
     template_no_cot = gsm8k_prompt_template
   
-  elif ds_name == 'MMLU-Pro':
+  elif ds_name == 'ReasonMem':
 
-    dataset = load_from_disk(os.path.join(dataset_dir, 'mmlu-pro')) 
+    reason_mem_path = os.path.join(dataset_dir, f'reason_mem_labels_mmlu_{reasonmem_lang}.json')
+    if os.path.isfile(reason_mem_path):
+        with open(reason_mem_path, 'r', encoding='utf-8') as f:
+            dataset = json.load(f)
+        subjects = sorted({d.get('Subject') for d in dataset if d.get('Subject')})
+        prompts_cot = {s: '' for s in subjects}
+        prompts_no_cot = {s: '' for s in subjects}
+        template = prompts_cot
+        template_no_cot = prompts_no_cot
+    else:
+        template = None
+        template_no_cot = None
 
-    categories = ['computer science', 'math', 'chemistry', 'engineering', 'law', 'biology',
-                  'health', 'physics', 'business', 'philosophy', 'economics', 'other',
-                  'psychology', 'history']
+  elif ds_name == 'BloomTaxo':
 
-    # load 5-shot prompts for each category
-    prompts_cot = {c: '' for c in categories}
-    prompts_no_cot = {c: '' for c in categories}
-
-    print("len(dataset['validation']): ",len(dataset['validation']))
-    for d in dataset['validation']:
-        prompts_cot[d['category']] += 'Q:' + ' ' + d['question'] + '\n' + form_options(d['options']) + '\n' + d['cot_content'] + '\n\n'
-        prompts_no_cot[d['category']] += 'Q:' + ' ' + d['question'] + '\n' + form_options(d['options']) + '\n' + f"The answer is ({d['answer']})." + '\n\n'
-    
-    template = prompts_cot
-    template_no_cot = prompts_no_cot
+    bloom_path = bloom_taxo_path(dataset_dir, reasonmem_lang)
+    if os.path.isfile(bloom_path):
+        with open(bloom_path, 'r', encoding='utf-8') as f:
+            dataset = json.load(f)
+        categories = set()
+        for entry in dataset:
+            if entry.get('Subject'):
+                categories.add(entry['Subject'])
+            elif entry.get('Group'):
+                categories.add(entry['Group'])
+            else:
+                categories.add("default")
+        categories = sorted(categories) if categories else ["default"]
+        prompts_cot = {s: '' for s in categories}
+        prompts_no_cot = {s: '' for s in categories}
+        template = prompts_cot
+        template_no_cot = prompts_no_cot
+    else:
+        template = None
+        template_no_cot = None
   
 
   elif ds_name == 'C-Eval-H':
@@ -125,15 +167,32 @@ def extract_final_answer(model_resp: str) -> float:
 
 
 
-def load_dataset(ds_name, dataset_dir, sample_num=3000, split='test'):
+def load_dataset(ds_name, dataset_dir, sample_num=3000, split='test', reasonmem_lang="en"):
    
-  if ds_name == 'MMLU-Pro':
+  if ds_name == 'ReasonMem':
+    dataset_path = os.path.join(dataset_dir, f'reason_mem_labels_mmlu_{reasonmem_lang}.json')
+    with open(dataset_path, 'r', encoding='utf-8') as f:
+        ds_data = json.load(f)
+    for entry in ds_data:
+        if 'category' not in entry and 'Subject' in entry:
+            entry['category'] = entry['Subject']
+    if sample_num is not None and len(ds_data) > sample_num:
+        ds_data = random.sample(ds_data, sample_num)
 
-    ds = load_from_disk(os.path.join(dataset_dir, 'mmlu-pro'))
-    test_data = list(ds[split])
-
-
-    ds_data = random.sample(test_data, sample_num) # 这里 sample_num = 3000
+  elif ds_name == 'BloomTaxo':
+    dataset_path = bloom_taxo_path(dataset_dir, reasonmem_lang)
+    with open(dataset_path, 'r', encoding='utf-8') as f:
+        ds_data = json.load(f)
+    for entry in ds_data:
+        if 'category' not in entry:
+            if entry.get('Subject'):
+                entry['category'] = entry['Subject']
+            elif entry.get('Group'):
+                entry['category'] = entry['Group']
+            else:
+                entry['category'] = "default"
+    if sample_num is not None and len(ds_data) > sample_num:
+        ds_data = random.sample(ds_data, sample_num)
 
   elif ds_name == 'PopQA':
 
@@ -224,10 +283,34 @@ def form_options_ceval(options: list):
     return option_str
 
 
+def _get_model_primary_device(model):
+    if hasattr(model, "get_input_embeddings"):
+        embed = model.get_input_embeddings()
+        if embed is not None and hasattr(embed, "weight"):
+            return embed.weight.device
+    try:
+        return next(model.parameters()).device
+    except StopIteration:
+        return torch.device("cuda:0")
+
+
+def _validate_input_ids(input_ids, vocab_size):
+    if input_ids.numel() == 0:
+        return
+    max_id = int(input_ids.max().item())
+    min_id = int(input_ids.min().item())
+    if min_id < 0 or max_id >= vocab_size:
+        raise ValueError(f"Input ids out of range: min={min_id} max={max_id} vocab_size={vocab_size}")
+
+
 def generate_questions(model, tokenizer, questions, n_new_tokens=200):
     
     # inference on base model
-    inputs = tokenizer(questions, return_tensors="pt", padding="longest", return_token_type_ids=False).to('cuda')
+    primary_device = _get_model_primary_device(model)
+    inputs = tokenizer(questions, return_tensors="pt", padding="longest", return_token_type_ids=False)
+    vocab_size = getattr(model.config, "vocab_size", tokenizer.vocab_size)
+    _validate_input_ids(inputs.input_ids, vocab_size)
+    inputs = inputs.to(primary_device)
     input_length = inputs.input_ids.size(1)
     gen_tokens = model.generate(**inputs, max_new_tokens=n_new_tokens, do_sample=False)
 
@@ -245,20 +328,20 @@ def set_act_modify_hooks(model, hs=True, mlp=True, attn=True, layer_name=None, m
             nonlocal direction, scale
             
             direction = direction / (direction.norm(dim=-1, keepdim=True) + 1e-8) #direction需要是一个单位向量
-            direction = direction.to('cuda')
-            
-        
+
             if "hs" in name:  
                 if isinstance(input, tuple):
-                    direction = direction.to(input[0].dtype)
-                    projection = (input[0] @ direction).unsqueeze(-1) * direction
-                    new_input = input[0] + scale * projection
+                    target = input[0]
+                    direction = direction.to(device=target.device, dtype=target.dtype)
+                    projection = (target @ direction).unsqueeze(-1) * direction
+                    new_input = target + scale * projection
                     input[0][:, :, :] = new_input[:, :, :]
                     # input[0] -= (input[0] @ direction).unsqueeze(-1) * direction 
                 else:
-                    direction = direction.to(input.dtype)
-                    projection = (input @ direction).unsqueeze(-1) * direction
-                    new_input = input + scale * projection
+                    target = input
+                    direction = direction.to(device=target.device, dtype=target.dtype)
+                    projection = (target @ direction).unsqueeze(-1) * direction
+                    new_input = target + scale * projection
                     input[:, :, :] = new_input[:, :, :]
 
                 
@@ -266,20 +349,20 @@ def set_act_modify_hooks(model, hs=True, mlp=True, attn=True, layer_name=None, m
             nonlocal direction, scale
             
             direction = direction / (direction.norm(dim=-1, keepdim=True) + 1e-8)
-            direction = direction.to('cuda')
             
             if "attn" in name or "mlp" in name:
                 if isinstance(output, tuple):
-                    # print('output[0].shape: ',output[0].shape)
-                    direction = direction.to(output[0].dtype)
-                    projection = (output[0] @ direction).unsqueeze(-1) * direction
-                    new_input = output[0] + scale * projection
+                    target = output[0]
+                    direction = direction.to(device=target.device, dtype=target.dtype)
+                    projection = (target @ direction).unsqueeze(-1) * direction
+                    new_input = target + scale * projection
                     output[0][:, :, :] = new_input[:, :, :]
      
                 else:
-                    direction = direction.to(output.dtype)
-                    projection = (output @ direction).unsqueeze(-1) * direction
-                    new_input = output + scale * projection
+                    target = output
+                    direction = direction.to(device=target.device, dtype=target.dtype)
+                    projection = (target @ direction).unsqueeze(-1) * direction
+                    new_input = target + scale * projection
                     output[:, :, :] = new_input[:, :, :]  
                     
         if patch_input:
@@ -311,7 +394,11 @@ def remove_hooks(hooks):
         
 def generate_questions_in_hook(model, tokenizer, questions, ablation_dir, scale, layer_name, attn_name, mlp_name, model_layers_num, n_new_tokens=200):
     
-    inputs = tokenizer(questions, return_tensors="pt", padding="longest", return_token_type_ids=False).to('cuda')
+    primary_device = _get_model_primary_device(model)
+    inputs = tokenizer(questions, return_tensors="pt", padding="longest", return_token_type_ids=False)
+    vocab_size = getattr(model.config, "vocab_size", tokenizer.vocab_size)
+    _validate_input_ids(inputs.input_ids, vocab_size)
+    inputs = inputs.to(primary_device)
     input_length = inputs.input_ids.size(1)
 
     # 将所有token位置，所有layer位置的表征往 reasoning or memory的方向上去推动
@@ -325,7 +412,7 @@ def generate_questions_in_hook(model, tokenizer, questions, ablation_dir, scale,
 
         
 def evaluation_on_dataset(model, tokenizer, val_sampled_data=None, prompts_cot=None, prompts_no_cot=None, run_in_fewshot=True, run_in_cot=True, 
-                          intervention=False, ablation_dir=None, layer_name = None, model_layers_num=None, attn_name = None, mlp_name = None, batch_size=4, scale=0.1, ds_name='MMLU-Pro'):
+                          intervention=False, ablation_dir=None, layer_name = None, model_layers_num=None, attn_name = None, mlp_name = None, batch_size=4, scale=0.1, ds_name='ReasonMem'):
     
     queries_batch = []  
     entry_batch = []
@@ -334,7 +421,7 @@ def evaluation_on_dataset(model, tokenizer, val_sampled_data=None, prompts_cot=N
     
     for ix, entry in tqdm(enumerate(val_sampled_data)):
         
-        if ds_name == 'MMLU-Pro':
+        if ds_name in ['ReasonMem', 'BloomTaxo']:
             prefix_cot = prompts_cot[entry['category']]
             prefix_no_cot = prompts_no_cot[entry['category']]
             
@@ -386,7 +473,7 @@ def evaluation_on_dataset(model, tokenizer, val_sampled_data=None, prompts_cot=N
                 
             # metric calculating...
             
-            if ds_name == 'MMLU-Pro': 
+            if ds_name in ['ReasonMem', 'BloomTaxo']: 
                 for answer, entry in zip(responses, entry_batch):
 
                     entry['solution'] = answer
@@ -471,7 +558,7 @@ def compute_performance_on_reason_memory_subset(val_sampled_data=None, memory_in
         if entry['model_predict_correctness'] == True:
             correct_predictions += 1
     
-    memory_accuracy = correct_predictions / total_predictions
+    memory_accuracy = (correct_predictions / total_predictions) if total_predictions else 0.0
     
 
     correct_predictions = 0
@@ -481,7 +568,7 @@ def compute_performance_on_reason_memory_subset(val_sampled_data=None, memory_in
         if entry['model_predict_correctness'] == True:
             correct_predictions += 1
 
-    reason_accuracy = correct_predictions / total_predictions
+    reason_accuracy = (correct_predictions / total_predictions) if total_predictions else 0.0
     
     if intervention:
         print(f"***Intervention in Layer {intervention_layer}, Memory Subset Accuracy: {memory_accuracy:.4f}")
@@ -510,9 +597,9 @@ def compute_performance_on_reason_subset(val_sampled_data=None, intervention=Fal
         print(f"***Original performance of Reason Subset {ds_name} Accuracy: {reason_accuracy:.4f}")
 
         
-def get_prediction(output=None, ds_name='MMLU-Pro'):
+def get_prediction(output=None, ds_name='ReasonMem'):
     
-    if ds_name == 'MMLU-Pro':
+    if ds_name in ['ReasonMem', 'BloomTaxo']:
         pattern = r"answer is \(?([ABCDEFGHIJ])\)?"
         match = re.search(pattern, output)
         if match:
@@ -567,6 +654,47 @@ def get_candidate_directions(hs_cache_no_cot, model_layers_num, mlp_dim_num, rea
         mean_memory_hs_no_cot = memory_hs_no_cot.mean(dim=0)
 
         mean_diff = mean_reason_hs_no_cot - mean_memory_hs_no_cot  #Reasoning features shape: [bsz, dims] 
+        candidate_directions[layer] = mean_diff
+
+    return candidate_directions
+
+
+def get_candidate_directions_bloom(bloom_cache_by_label, model_layers_num, mlp_dim_num,
+                                   target_label, direction_mode="mean_all"):
+    target_label = normalize_bloom_label(target_label)
+    if target_label not in bloom_cache_by_label:
+        raise ValueError(f"Target label not found in Bloom caches: {target_label}")
+
+    candidate_directions = torch.zeros((model_layers_num, mlp_dim_num), dtype=torch.float64, device='cuda')
+
+    labels = list(bloom_cache_by_label.keys())
+    other_labels = [label for label in labels if label != target_label]
+
+    for layer in range(model_layers_num):
+        target_hs = bloom_cache_by_label[target_label][layer].to(torch.float64)
+        mean_target = target_hs.mean(dim=0)
+
+        if direction_mode == "mean_all":
+            sum_hs = target_hs.sum(dim=0)
+            total_count = target_hs.shape[0]
+            for label in other_labels:
+                label_hs = bloom_cache_by_label[label][layer].to(torch.float64)
+                sum_hs += label_hs.sum(dim=0)
+                total_count += label_hs.shape[0]
+            mean_ref = sum_hs / max(total_count, 1)
+        else:
+            sum_hs = torch.zeros_like(mean_target)
+            total_count = 0
+            for label in other_labels:
+                label_hs = bloom_cache_by_label[label][layer].to(torch.float64)
+                sum_hs += label_hs.sum(dim=0)
+                total_count += label_hs.shape[0]
+            mean_ref = sum_hs / max(total_count, 1)
+
+        mean_diff = mean_target - mean_ref
+        norm = torch.norm(mean_diff)
+        if norm > 0:
+            mean_diff = mean_diff / norm
         candidate_directions[layer] = mean_diff
 
     return candidate_directions

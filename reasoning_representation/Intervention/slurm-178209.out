@@ -1,0 +1,94 @@
+Find 4 GPU can be used.
+GPU 1: NVIDIA A100-SXM4-40GB
+GPU 2: NVIDIA A100-SXM4-40GB
+GPU 3: NVIDIA A100-SXM4-40GB
+GPU 4: NVIDIA A100-SXM4-40GB
+Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:03,  1.22s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:02<00:02,  1.25s/it]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:03<00:01,  1.26s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.18it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.00it/s]
+model:  LlamaForCausalLM(
+  (model): LlamaModel(
+    (embed_tokens): Embedding(128256, 4096)
+    (layers): ModuleList(
+      (0-31): 32 x LlamaDecoderLayer(
+        (self_attn): LlamaAttention(
+          (q_proj): Linear(in_features=4096, out_features=4096, bias=False)
+          (k_proj): Linear(in_features=4096, out_features=1024, bias=False)
+          (v_proj): Linear(in_features=4096, out_features=1024, bias=False)
+          (o_proj): Linear(in_features=4096, out_features=4096, bias=False)
+        )
+        (mlp): LlamaMLP(
+          (gate_proj): Linear(in_features=4096, out_features=14336, bias=False)
+          (up_proj): Linear(in_features=4096, out_features=14336, bias=False)
+          (down_proj): Linear(in_features=14336, out_features=4096, bias=False)
+          (act_fn): SiLU()
+        )
+        (input_layernorm): LlamaRMSNorm((4096,), eps=1e-05)
+        (post_attention_layernorm): LlamaRMSNorm((4096,), eps=1e-05)
+      )
+    )
+    (norm): LlamaRMSNorm((4096,), eps=1e-05)
+    (rotary_emb): LlamaRotaryEmbedding()
+  )
+  (lm_head): Linear(in_features=4096, out_features=128256, bias=False)
+)
+model.config:  LlamaConfig {
+  "architectures": [
+    "LlamaForCausalLM"
+  ],
+  "attention_bias": false,
+  "attention_dropout": 0.0,
+  "bos_token_id": 128000,
+  "eos_token_id": 128009,
+  "head_dim": 128,
+  "hidden_act": "silu",
+  "hidden_size": 4096,
+  "initializer_range": 0.02,
+  "intermediate_size": 14336,
+  "max_position_embeddings": 8192,
+  "mlp_bias": false,
+  "model_type": "llama",
+  "num_attention_heads": 32,
+  "num_hidden_layers": 32,
+  "num_key_value_heads": 8,
+  "pretraining_tp": 1,
+  "rms_norm_eps": 1e-05,
+  "rope_scaling": null,
+  "rope_theta": 500000.0,
+  "tie_word_embeddings": false,
+  "torch_dtype": "float16",
+  "transformers_version": "4.55.2",
+  "use_cache": true,
+  "vocab_size": 128256
+}
+
+model.config.model_type.lower():  llama
+----------------- Start Answering -------------------
+layers_to_cache:  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
+----------------- Running no cot Inference -------------------
+0it [00:00, ?it/s]64it [00:03, 16.58it/s]127it [00:06, 18.81it/s]
+Traceback (most recent call last):
+  File "/home/besher.hassan/educational_reasoning/bloom_taxo_6_jan/Linear_Reasoning_Features/reasoning_representation/Intervention/../LiReFs_storing_hs.py", line 245, in <module>
+    output = generate_outputs(queries_batch)
+  File "/home/besher.hassan/educational_reasoning/bloom_taxo_6_jan/Linear_Reasoning_Features/reasoning_representation/Intervention/../LiReFs_storing_hs.py", line 183, in generate_outputs
+    output = model(**inputs, output_hidden_states = True)
+  File "/home/besher.hassan/miniconda3/envs/jais-env/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/home/besher.hassan/miniconda3/envs/jais-env/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/besher.hassan/miniconda3/envs/jais-env/lib/python3.10/site-packages/accelerate/hooks.py", line 176, in new_forward
+    return module._hf_hook.post_forward(module, output)
+  File "/home/besher.hassan/miniconda3/envs/jais-env/lib/python3.10/site-packages/accelerate/hooks.py", line 400, in post_forward
+    output = send_to_device(output, self.input_device, skip_keys=self.skip_keys)
+  File "/home/besher.hassan/miniconda3/envs/jais-env/lib/python3.10/site-packages/accelerate/utils/operations.py", line 178, in send_to_device
+    {
+  File "/home/besher.hassan/miniconda3/envs/jais-env/lib/python3.10/site-packages/accelerate/utils/operations.py", line 179, in <dictcomp>
+    k: t if k in skip_keys else send_to_device(t, device, non_blocking=non_blocking, skip_keys=skip_keys)
+  File "/home/besher.hassan/miniconda3/envs/jais-env/lib/python3.10/site-packages/accelerate/utils/operations.py", line 169, in send_to_device
+    return honor_type(
+  File "/home/besher.hassan/miniconda3/envs/jais-env/lib/python3.10/site-packages/accelerate/utils/operations.py", line 81, in honor_type
+    return type(obj)(generator)
+  File "/home/besher.hassan/miniconda3/envs/jais-env/lib/python3.10/site-packages/accelerate/utils/operations.py", line 170, in <genexpr>
+    tensor, (send_to_device(t, device, non_blocking=non_blocking, skip_keys=skip_keys) for t in tensor)
+  File "/home/besher.hassan/miniconda3/envs/jais-env/lib/python3.10/site-packages/accelerate/utils/operations.py", line 153, in send_to_device
+    return tensor.to(device, non_blocking=non_blocking)
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 284.00 MiB. GPU 0 has a total capacity of 39.56 GiB of which 198.75 MiB is free. Including non-PyTorch memory, this process has 39.36 GiB memory in use. Of the allocated memory 38.33 GiB is allocated by PyTorch, and 543.28 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+srun: error: gpu-57: task 0: Exited with exit code 1
