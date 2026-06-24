@@ -159,12 +159,12 @@ lang_suffix = f"_{reasonmem_lang}" if reasonmem_lang else ""
 
 DATASET_CONFIG = {
     "reason_mem": {
-        "file_template": "reason_mem_labels_mmlu_{lang}.json",
+        "file_template": "reason_mem_labels_mmlu_{lang}_validation.json",
         "lang_map": {},
         "output_key": "mmlu",
     },
     "bloom_taxo": {
-        "file_template": "bloom_tax_labels_{lang}.json",
+        "file_template": "bloom_tax_labels_{lang}_validation.json",
         "lang_map": {"ind": "indo"},
         "output_key": "bloom_taxo",
     },

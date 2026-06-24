@@ -171,7 +171,7 @@ def write_answers(path, payload):
         json.dump(payload, f, ensure_ascii=False, indent=2)
 
 def reasonmem_paths(dataset_dir, lang):
-    dataset_filename = f"reason_mem_labels_mmlu_{lang}.json"
+    dataset_filename = f"reason_mem_labels_mmlu_{lang}_validation.json"
     responses_filename = f"reason_mem_labels_mmlu_{lang}_responses.json"
     dataset_path = os.path.join(dataset_dir, dataset_filename)
     responses_path = os.path.join(dataset_dir, responses_filename)

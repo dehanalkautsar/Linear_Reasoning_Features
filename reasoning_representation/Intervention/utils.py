@@ -34,7 +34,7 @@ def normalize_bloom_label(label):
 
 def bloom_taxo_path(dataset_dir, lang):
     dataset_lang = BLOOM_LANG_MAP.get(lang, lang)
-    return os.path.join(dataset_dir, f"bloom_tax_labels_{dataset_lang}.json")
+    return os.path.join(dataset_dir, f"bloom_tax_labels_{dataset_lang}_validation.json")
 
 
 gsm8k_prompt_template = """As an expert problem solver, solve step by step the following mathematical questions.
