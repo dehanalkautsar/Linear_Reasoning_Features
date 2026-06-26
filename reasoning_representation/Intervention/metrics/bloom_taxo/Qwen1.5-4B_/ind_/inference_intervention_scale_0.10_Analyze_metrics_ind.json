@@ -1,0 +1,21 @@
+{
+  "model_name": "Qwen/Qwen1.5-4B",
+  "dataset_name": "BloomTaxo",
+  "label_subset": "analyze",
+  "target_label": "analyze",
+  "direction_mode": "mean_others",
+  "intervention": true,
+  "scale": 0.1,
+  "split": "test",
+  "best_layer": 14,
+  "best_accuracy": 0.11742424242424243,
+  "metrics_by_layer": {
+    "14": {
+      "overall": {
+        "total": 528,
+        "correct": 62,
+        "accuracy": 0.11742424242424243
+      }
+    }
+  }
+}

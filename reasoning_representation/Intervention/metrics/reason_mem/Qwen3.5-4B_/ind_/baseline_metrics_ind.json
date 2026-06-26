@@ -1,0 +1,24 @@
+{
+  "model_name": "Qwen/Qwen3.5-4B",
+  "dataset_name": "ReasonMem",
+  "label_subset": "all",
+  "intervention": false,
+  "scale": 0.1,
+  "metrics": {
+    "overall": {
+      "total": 13391,
+      "correct": 3321,
+      "accuracy": 0.24800238966470017
+    },
+    "reason": {
+      "total": 3859,
+      "correct": 663,
+      "accuracy": 0.17180616740088106
+    },
+    "memory": {
+      "total": 9532,
+      "correct": 2658,
+      "accuracy": 0.27885018883759966
+    }
+  }
+}

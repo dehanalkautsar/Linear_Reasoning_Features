@@ -10,19 +10,21 @@ RUN_CH=false
 RUN_IND=true
 
 # Dataset toggles.
-RUN_REASON_MEM=true
-RUN_BLOOM_TAXO=false
+RUN_REASON_MEM=false
+RUN_BLOOM_TAXO=true
 
 # Model toggles.
 RUN_LLAMA_3_8B=false
 RUN_GEMMA_2_9B=false
-RUN_QWEN_3_5_4B=true
+RUN_QWEN_3_5_4B=false
+RUN_QWEN_1_5_4B=true
 
 BATCH_SIZE=46
+# BATCH_SIZE=92 # 2 GPU A40
 export BATCH_SIZE
 
-MODEL_NAMES=("Meta-Llama-3-8B-Instruct" "google/gemma-2-9b" "Qwen/Qwen3.5-4B")
-MODEL_FLAGS=("${RUN_LLAMA_3_8B}" "${RUN_GEMMA_2_9B}" "${RUN_QWEN_3_5_4B}")
+MODEL_NAMES=("Meta-Llama-3-8B-Instruct" "google/gemma-2-9b" "Qwen/Qwen3.5-4B" "Qwen/Qwen1.5-4B")
+MODEL_FLAGS=("${RUN_LLAMA_3_8B}" "${RUN_GEMMA_2_9B}" "${RUN_QWEN_3_5_4B}" "${RUN_QWEN_1_5_4B}")
 HS_CACHE_DIR="${SCRIPT_DIR}/../reasoning_representations_outputs"
 METRICS_ROOT="${METRICS_ROOT:-${SCRIPT_DIR}/metrics}"
 LOGS_ROOT="${LOGS_ROOT:-${SCRIPT_DIR}/logs}"
@@ -51,13 +53,13 @@ SCRIPTS_REASON_MEM=(
   "${SCRIPT_DIR}/run_intervention_scale_-0.15.sh"
 )
 SCRIPTS_REASON_MEM_FLAGS=(
-  true
-  true
-  true
-  true
-  true
-  true
-  true
+  false
+  false
+  false
+  false
+  false
+  false
+  false
 )
 SCRIPTS_BLOOM_TAXO=(
   "${SCRIPT_DIR}/run_baseline_BloomTaxo_Remember.sh"
@@ -82,26 +84,26 @@ SCRIPTS_BLOOM_TAXO=(
   "${SCRIPT_DIR}/run_intervention_scale_0.15_Evaluate.sh"
 )
 SCRIPTS_BLOOM_TAXO_FLAGS=(
+  false
+  false
+  false
+  false
+  false
+  false
+  false
+  false
+  false
+  false
+  false
+  false
+  false
+  false
+  false
   true
-  true
-  true
-  true
-  true
-  true
-  true
-  true
-  true
-  true
-  true
-  true
-  true
-  true
-  true
-  true
-  true
-  true
-  true
-  true
+  false
+  false
+  false
+  false
 )
 
 if [[ ${#SCRIPTS_REASON_MEM[@]} -ne ${#SCRIPTS_REASON_MEM_FLAGS[@]} ]]; then

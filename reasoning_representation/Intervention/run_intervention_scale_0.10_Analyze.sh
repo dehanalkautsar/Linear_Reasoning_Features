@@ -16,8 +16,27 @@ METRICS_DIR="${METRICS_DIR:-${SCRIPT_DIR}/metrics}"
 LOGS_DIR="${LOGS_DIR:-${SCRIPT_DIR}/logs}"
 mkdir -p "${METRICS_DIR}" "${LOGS_DIR}"
 
-LOG_FILE="${LOGS_DIR}/intervention_scale_0.10_Analyze${LANG_SUFFIX}.log"
+# LOG_FILE="${LOGS_DIR}/intervention_scale_0.10_Analyze${LANG_SUFFIX}.log"
 
+# python "${SCRIPT_DIR}/features_intervention.py" \
+#   --dataset_dir "${DATASET_DIR}" \
+#   --dataset_name "BloomTaxo" \
+#   --model_name "${MODEL_NAME}" \
+#   --hs_cache_dir "${DATASET_DIR}" \
+#   --lang "${LANG_CODE}" \
+#   --label_subset "analyze" \
+#   --Intervention True \
+#   --scale 0.10 \
+#   --batch_size "${BATCH_SIZE:-46}" \
+#   --metrics_out "${METRICS_DIR}/intervention_scale_0.10_Analyze_metrics${LANG_SUFFIX}.json" \
+#   2>&1 | tee "${LOG_FILE}"
+
+
+### Comment / Un-comment this ###
+#################################
+
+# full sweep on validation set
+LOG_FILE="${LOGS_DIR}/fullsweep_intervention_scale_0.10_Analyze${LANG_SUFFIX}.log"
 python "${SCRIPT_DIR}/features_intervention.py" \
   --dataset_dir "${DATASET_DIR}" \
   --dataset_name "BloomTaxo" \
@@ -27,6 +46,24 @@ python "${SCRIPT_DIR}/features_intervention.py" \
   --label_subset "analyze" \
   --Intervention True \
   --scale 0.10 \
+  --split "validation" \
   --batch_size "${BATCH_SIZE:-46}" \
-  --metrics_out "${METRICS_DIR}/intervention_scale_0.10_Analyze_metrics${LANG_SUFFIX}.json" \
+  --metrics_out "${METRICS_DIR}/fullsweep_intervention_scale_0.10_Analyze_metrics${LANG_SUFFIX}.json" \
   2>&1 | tee "${LOG_FILE}"
+  
+## intervention on test set (1 layer only)
+# LOG_FILE="${LOGS_DIR}/inference_intervention_scale_0.10_Analyze${LANG_SUFFIX}.log"
+# python "${SCRIPT_DIR}/features_intervention.py" \
+#   --dataset_dir "${DATASET_DIR}" \
+#   --dataset_name "BloomTaxo" \
+#   --model_name "${MODEL_NAME}" \
+#   --hs_cache_dir "${DATASET_DIR}" \
+#   --lang "${LANG_CODE}" \
+#   --label_subset "analyze" \
+#   --Intervention True \
+#   --scale 0.10 \
+#   --split "test" \
+#   --fixed_layer 14 \
+#   --batch_size "${BATCH_SIZE:-46}" \
+#   --metrics_out "${METRICS_DIR}/inference_intervention_scale_0.10_Analyze_metrics${LANG_SUFFIX}.json" \
+#   2>&1 | tee "${LOG_FILE}"

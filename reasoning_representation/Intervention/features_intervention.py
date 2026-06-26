@@ -50,6 +50,7 @@ def parse_args():
     parser.add_argument('--dataset_dir', type=str, default='/mnt/workspace/Interp_Reasoning/dataset', help="Dataset directory")
     parser.add_argument('--Intervention', type=bool, default=False, help="Whether to perform features intervention")
     parser.add_argument('--dataset_name', type=str, default='ReasonMem', help="ReasonMem, BloomTaxo, GSM8k, PopQA, C-Eval-H, MGSM, GSM-symbolic")
+    parser.add_argument('--split', type=str, default='validation', choices=("validation", "test"), help="Dataset split to be used")
     parser.add_argument('--lang', type=str, default='en', help="ReasonMem language suffix, e.g. en, ar, ch, ind")
     parser.add_argument('--hs_cache_dir', type=str, default='/mnt/workspace/workgroup/yhhong', help="hs_cache_dir")
     parser.add_argument('--scale', type=float, default=0.1, help="scale for intervention")
@@ -60,12 +61,14 @@ def parse_args():
                         help="ReasonMem: all, reasoning, memorization. BloomTaxo: all or a label name.")
     parser.add_argument('--target_label', type=str, default=None,
                         help="BloomTaxo only: target label for one-vs-rest direction.")
-    parser.add_argument('--direction_mode', type=str, default='mean_all', choices=("mean_all", "mean_others"),
+    parser.add_argument('--direction_mode', type=str, default='mean_others', choices=("mean_all", "mean_others"),
                         help="BloomTaxo direction mode: mean_all or mean_others.")
     parser.add_argument('--layer_start', type=int, default=None,
                         help="Intervention start layer index (inclusive)")
     parser.add_argument('--layer_end', type=int, default=None,
                         help="Intervention end layer index (inclusive)")
+    parser.add_argument('--fixed_layer', type=int, default=None,
+                        help="Intervention specific layer index (inclusive)")
 
 
     args = parser.parse_args()
@@ -142,7 +145,7 @@ def format_scale_dir(scale_value):
         return "scale"
 
 
-def build_answers_path(args, dataset_name, label_subset, target_label=None, layer=None, model_layers_num=None):
+def build_answers_path(args, dataset_name, label_subset, target_label=None, layer=None, model_layers_num=None, split="validation"):
     base_dir = resolve_answers_base_dir(args)
     if not base_dir:
         return None
@@ -155,11 +158,11 @@ def build_answers_path(args, dataset_name, label_subset, target_label=None, laye
 
     label_tag = normalize_label_tag(dataset_name, label_subset, target_label=target_label)
     if layer is None:
-        filename = f"responses_{label_tag}.json"
+        filename = f"responses_{label_tag}_{split}.json"
     else:
         width = len(str((model_layers_num - 1) if model_layers_num else layer))
         layer_str = str(layer).zfill(max(width, 1))
-        filename = f"layer_{layer_str}_{label_tag}.json"
+        filename = f"layer_{layer_str}_{label_tag}_{split}.json"
     return os.path.join(answers_dir, filename)
 
 
@@ -170,8 +173,8 @@ def write_answers(path, payload):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
 
-def reasonmem_paths(dataset_dir, lang):
-    dataset_filename = f"reason_mem_labels_mmlu_{lang}_validation.json"
+def reasonmem_paths(dataset_dir, lang, split='validation'):
+    dataset_filename = f"reason_mem_labels_mmlu_{lang}_{split}.json"
     responses_filename = f"reason_mem_labels_mmlu_{lang}_responses.json"
     dataset_path = os.path.join(dataset_dir, dataset_filename)
     responses_path = os.path.join(dataset_dir, responses_filename)
@@ -181,7 +184,7 @@ def reasonmem_paths(dataset_dir, lang):
 def preflight_checks(args, dataset_name):
     model_tag = model_tag_from_name(args.model_name)
     if dataset_name == 'ReasonMem':
-        dataset_path, _, dataset_filename = reasonmem_paths(args.dataset_dir, args.lang)
+        dataset_path, _, dataset_filename = reasonmem_paths(args.dataset_dir, args.lang, args.split)
         if not os.path.isfile(dataset_path):
             raise FileNotFoundError(f"ReasonMem dataset not found: {dataset_path}")
         with open(dataset_path, 'r', encoding='utf-8') as f:
@@ -200,7 +203,7 @@ def preflight_checks(args, dataset_name):
             if not os.path.isfile(cache_path):
                 raise FileNotFoundError(f"Hidden-state cache not found: {cache_path}")
     elif dataset_name == 'BloomTaxo':
-        dataset_path = bloom_taxo_path(args.dataset_dir, args.lang)
+        dataset_path = bloom_taxo_path(args.dataset_dir, args.lang, args.split)
         dataset_filename = os.path.basename(dataset_path)
         if not os.path.isfile(dataset_path):
             raise FileNotFoundError(f"BloomTaxo dataset not found: {dataset_path}")
@@ -282,8 +285,10 @@ label_subset = args.label_subset
 target_label = args.target_label
 direction_mode = args.direction_mode
 reasonmem_lang = args.lang
+split = args.split
+fixed_layer = args.fixed_layer
 lang_suffix = f"_{reasonmem_lang}" if reasonmem_lang else ""
-reasonmem_dataset_path, reasonmem_responses_path, _ = reasonmem_paths(dataset_dir, reasonmem_lang)
+reasonmem_dataset_path, reasonmem_responses_path, _ = reasonmem_paths(dataset_dir, reasonmem_lang, split)
 if dataset_name == 'BloomTaxo':
     label_subset = normalize_bloom_label(label_subset) if label_subset != 'all' else 'all'
     if target_label:
@@ -372,7 +377,7 @@ n_new_tokens = 200
 if not args.Intervention:
 
     if dataset_name == 'BloomTaxo':
-        bloom_dataset_path = bloom_taxo_path(dataset_dir, reasonmem_lang)
+        bloom_dataset_path = bloom_taxo_path(dataset_dir, reasonmem_lang, args.split)
         with open(bloom_dataset_path, 'r', encoding='utf-8') as f:
             ds_data = json.load(f)
         for entry in ds_data:
@@ -404,7 +409,8 @@ if not args.Intervention:
             args,
             dataset_name,
             label_subset,
-            target_label=target_label
+            target_label=target_label,
+            split=split
         )
         write_answers(answers_path, ds_data)
 
@@ -420,7 +426,7 @@ if not args.Intervention:
         }
         write_metrics(args.metrics_out, metrics_payload)
     else:
-        #ds_data = load_dataset(ds_name = dataset_name, dataset_dir=dataset_dir, split='test')
+        #ds_data = load_dataset(ds_name = dataset_name, dataset_dir=dataset_dir, split=split)
         with open(reasonmem_dataset_path, 'r', encoding='utf-8') as f:
             ds_data = json.load(f)
         for entry in ds_data:
@@ -452,7 +458,8 @@ if not args.Intervention:
             args,
             dataset_name,
             label_subset,
-            target_label=target_label
+            target_label=target_label,
+            split=split
         )
         write_answers(answers_path, ds_data)
         
@@ -542,7 +549,7 @@ elif args.Intervention:
             direction_mode=direction_mode
         )
 
-        bloom_dataset_path = bloom_taxo_path(dataset_dir, reasonmem_lang)
+        bloom_dataset_path = bloom_taxo_path(dataset_dir, reasonmem_lang, args.split)
         with open(bloom_dataset_path, 'r', encoding='utf-8') as f:
             sampled_data = json.load(f)
         for entry in sampled_data:
@@ -563,12 +570,13 @@ elif args.Intervention:
         prompt_template, prompt_template_no_cot = load_prompt_template(
             ds_name=dataset_name,
             dataset_dir=dataset_dir,
-            reasonmem_lang=reasonmem_lang
+            reasonmem_lang=reasonmem_lang # no need to set split as prompt always comes from the val set.
         )
 
-        print(f'****Running on {dataset_name} on {model_name} with Features Intervention')
+        print(f'****Running on {dataset_name} on {model_name} with Features Intervention {scale}')
 
         per_layer_metrics = {}
+
 
         if args.layer_start is None and args.layer_end is None:
             layer_range = range(model_layers_num)
@@ -578,7 +586,20 @@ elif args.Intervention:
             if start < 0 or end < 0 or start > end or end >= model_layers_num:
                 raise ValueError(f"Invalid layer range: start={start} end={end} for {model_layers_num} layers")
             layer_range = range(start, end + 1)
-
+        # intervention to test set mode: only test 1 best layer
+        if args.split == "test":
+            if args.fixed_layer is not None:
+                layer_range = [args.fixed_layer]
+            else:
+                layer_range = layer_range[0]
+        elif args.split == "validation":
+            if args.fixed_layer is not None:
+                layer_range = [args.fixed_layer]
+            # else:
+                # do nothing with the layer_range
+    
+        best_accuracy = -1
+        best_layer = -1
         for layer in layer_range:
             print(f'Doing Intervention in Layer {layer}')
             ablation_dir = candidate_directions[layer]
@@ -597,7 +618,8 @@ elif args.Intervention:
                 label_subset,
                 target_label=target_label,
                 layer=layer,
-                model_layers_num=model_layers_num
+                model_layers_num=model_layers_num,
+                split=split
             )
             write_answers(answers_path, ds_data)
 
@@ -609,6 +631,10 @@ elif args.Intervention:
             )
             per_layer_metrics[str(layer)] = {"overall": overall_metrics}
 
+            if overall_metrics['accuracy'] > best_accuracy:
+                best_accuracy = overall_metrics['accuracy']
+                best_layer = layer
+
         metrics_payload = {
             "model_name": model_name,
             "dataset_name": dataset_name,
@@ -617,6 +643,9 @@ elif args.Intervention:
             "direction_mode": direction_mode,
             "intervention": True,
             "scale": scale,
+            "split": split,
+            "best_layer": best_layer,
+            "best_accuracy": best_accuracy,
             "metrics_by_layer": per_layer_metrics
         }
 
@@ -624,7 +653,7 @@ elif args.Intervention:
     else:
         # loading ReasonMem to get the direction
 
-        # mmlu_pro_ds = load_dataset(ds_name = dataset_name, dataset_dir=dataset_dir, split='test')
+        # mmlu_pro_ds = load_dataset(ds_name = dataset_name, dataset_dir=dataset_dir, split=split)
         
         loaded_dict = torch.load(os.path.join(save_path, f'{model_tag}-base_hs_cache_no_cot_all{lang_suffix}.pt'))
         hs_cache_no_cot = loaded_dict['mmlu'] 
@@ -649,17 +678,17 @@ elif args.Intervention:
         prompt_template, prompt_template_no_cot = load_prompt_template(
             ds_name=dataset_name,
             dataset_dir=dataset_dir,
-            reasonmem_lang=reasonmem_lang
+            reasonmem_lang=reasonmem_lang # no need to set split as prompt always comes from the val set.
         )
         if dataset_name != 'ReasonMem':
             ds_data = load_dataset(
                 ds_name=dataset_name,
                 dataset_dir=dataset_dir,
-                split='test',
+                split=split,
                 reasonmem_lang=reasonmem_lang
             )
 
-        print(f'****Running on {dataset_name} on {model_name} with Features Intervention')
+        print(f'****Running on {dataset_name} on {model_name} with Features Intervention {scale}')
 
         per_layer_metrics = {}
 
@@ -671,8 +700,17 @@ elif args.Intervention:
             if start < 0 or end < 0 or start > end or end >= model_layers_num:
                 raise ValueError(f"Invalid layer range: start={start} end={end} for {model_layers_num} layers")
             layer_range = range(start, end + 1)
+        
+        # intervention to test set mode: only test 1 best layer
+        if args.split == "test":
+            if args.fixed_layer is not None:
+                layer_range = [args.fixed_layer]
+            else:
+                layer_range = layer_range[0]
 
-        # Intervention Mode 
+        # Intervention time!
+        best_layer = -1
+        best_accuracy = -1
         for layer in layer_range:
             
             print(f'Doing Intervention in Layer {layer}')
@@ -689,7 +727,8 @@ elif args.Intervention:
                     label_subset,
                     target_label=target_label,
                     layer=layer,
-                    model_layers_num=model_layers_num
+                    model_layers_num=model_layers_num,
+                    split=split
                 )
                 write_answers(answers_path, ds_data)
 
@@ -717,7 +756,8 @@ elif args.Intervention:
                     label_subset,
                     target_label=target_label,
                     layer=layer,
-                    model_layers_num=model_layers_num
+                    model_layers_num=model_layers_num,
+                    split=split
                 )
                 write_answers(answers_path, ds_data)
 
@@ -747,6 +787,10 @@ elif args.Intervention:
                         "reason": reason_metrics,
                         "memory": memory_metrics
                     }
+                    if overall_metrics['accuracy'] > best_accuracy:
+                        best_accuracy = overall_metrics['accuracy']
+                        best_layer = layer
+
                 elif label_subset == 'reasoning':
                     reasoning_metrics = compute_accuracy(ds_data)
                     print(
@@ -757,6 +801,10 @@ elif args.Intervention:
                     per_layer_metrics[str(layer)] = {
                         "reason": reasoning_metrics
                     }
+                    if reasoning_metrics['accuracy'] > best_accuracy:
+                        best_accuracy = reasoning_metrics['accuracy']
+                        best_layer = layer
+
                 else:
                     memory_metrics = compute_accuracy(ds_data)
                     print(
@@ -767,6 +815,9 @@ elif args.Intervention:
                     per_layer_metrics[str(layer)] = {
                         "memory": memory_metrics
                     }
+                    if memory_metrics['accuracy'] > best_accuracy:
+                        best_accuracy = memory_metrics['accuracy']
+                        best_layer = layer
 
         metrics_payload = {
             "model_name": model_name,
@@ -774,6 +825,9 @@ elif args.Intervention:
             "label_subset": label_subset,
             "intervention": True,
             "scale": scale,
+            "split": split,
+            "best_layer": best_layer,
+            "best_accuracy": best_accuracy,
             "metrics_by_layer": per_layer_metrics
         }
 

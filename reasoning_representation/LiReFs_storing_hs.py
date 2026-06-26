@@ -257,32 +257,40 @@ total_samples = len(sampled_data)
 
 layers_to_cache = list(range(model_layers_num))
 print('layers_to_cache: ',layers_to_cache)
-hs_cache_cot = {}
-hs_cache_no_cot = {}
+# hs_cache_cot = {}
+# hs_cache_no_cot = {}
+hs_cache_cot = {layer: [] for layer in layers_to_cache}
+hs_cache_no_cot = {layer: [] for layer in layers_to_cache}
 
 print('----------------- Running no cot Inference -------------------')
-for ix, entry in tqdm(enumerate(sampled_data)):
+for ix, entry in tqdm(enumerate(sampled_data), total=total_samples):
         
     question_text = entry['question']
     if entry.get('options'):
         question_text += "\n" + form_options(entry['options'])
-    query = 'Q: ' + question_text + "\nA: "
     
+    query = 'Q: ' + question_text + "\nA: "
     queries_batch.append(query)
     
     if len(queries_batch) == batch_size or ix == total_samples - 1:
-        output = generate_outputs(queries_batch)
+        with torch.no_grad():
+            output = generate_outputs(queries_batch)
         
         for layer in layers_to_cache:
-            if layer not in hs_cache_no_cot:
-                hs_cache_no_cot[layer] = output["hidden_states"][layer][: ,-1 , :].cpu() #bs * tok * dims
-            else:
-                hs_cache_no_cot[layer] = torch.cat((hs_cache_no_cot[layer], output["hidden_states"][layer][: ,-1 , :].cpu()), dim=0)
-
+            # if layer not in hs_cache_no_cot:
+            #     hs_cache_no_cot[layer] = output["hidden_states"][layer][: ,-1 , :].cpu() #bs * tok * dims
+            # else:
+            #     hs_cache_no_cot[layer] = torch.cat((hs_cache_no_cot[layer], output["hidden_states"][layer][: ,-1 , :].cpu()), dim=0)
+            hs = output["hidden_states"][layer][:, -1, :]
+            hs_cache_no_cot[layer].append(hs.detach().cpu())
         
+        del output, hs        
         queries_batch = []
-    clear_cuda_cache(target_gpu_ids)
+        clear_cuda_cache(target_gpu_ids)
     
+# concatenate once
+for layer in layers_to_cache:
+    hs_cache_no_cot[layer] = torch.cat(hs_cache_no_cot[layer], dim=0)
 
 # %% [markdown]
 # # **PCA**

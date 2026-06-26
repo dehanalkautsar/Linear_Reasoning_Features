@@ -32,9 +32,9 @@ def normalize_bloom_label(label):
     return BLOOM_ALIASES.get(normalized, normalized)
 
 
-def bloom_taxo_path(dataset_dir, lang):
+def bloom_taxo_path(dataset_dir, lang, split="test"):
     dataset_lang = BLOOM_LANG_MAP.get(lang, lang)
-    return os.path.join(dataset_dir, f"bloom_tax_labels_{dataset_lang}_validation.json")
+    return os.path.join(dataset_dir, f"bloom_tax_labels_{dataset_lang}_{split}.json")
 
 
 gsm8k_prompt_template = """As an expert problem solver, solve step by step the following mathematical questions.
@@ -66,7 +66,7 @@ gsm8k_prompt_template = """As an expert problem solver, solve step by step the f
   Q: {TARGET_QUESTION}
   A: Let's think step by step. """
 
-def load_prompt_template(ds_name, dataset_dir, reasonmem_lang="en"):
+def load_prompt_template(ds_name, dataset_dir, split='validation', reasonmem_lang="en"):
   
   if ds_name in ['GSM8k', 'GSM-symbolic', "MGSM"]:
 
@@ -75,7 +75,7 @@ def load_prompt_template(ds_name, dataset_dir, reasonmem_lang="en"):
   
   elif ds_name == 'ReasonMem':
 
-    reason_mem_path = os.path.join(dataset_dir, f'reason_mem_labels_mmlu_{reasonmem_lang}.json')
+    reason_mem_path = os.path.join(dataset_dir, f'reason_mem_labels_mmlu_{reasonmem_lang}_{split}.json')
     if os.path.isfile(reason_mem_path):
         with open(reason_mem_path, 'r', encoding='utf-8') as f:
             dataset = json.load(f)
@@ -90,7 +90,7 @@ def load_prompt_template(ds_name, dataset_dir, reasonmem_lang="en"):
 
   elif ds_name == 'BloomTaxo':
 
-    bloom_path = bloom_taxo_path(dataset_dir, reasonmem_lang)
+    bloom_path = bloom_taxo_path(dataset_dir, reasonmem_lang, split)
     if os.path.isfile(bloom_path):
         with open(bloom_path, 'r', encoding='utf-8') as f:
             dataset = json.load(f)
@@ -167,10 +167,10 @@ def extract_final_answer(model_resp: str) -> float:
 
 
 
-def load_dataset(ds_name, dataset_dir, sample_num=3000, split='test', reasonmem_lang="en"):
+def load_dataset(ds_name, dataset_dir, sample_num=None, split='test', reasonmem_lang="en"):
    
   if ds_name == 'ReasonMem':
-    dataset_path = os.path.join(dataset_dir, f'reason_mem_labels_mmlu_{reasonmem_lang}.json')
+    dataset_path = os.path.join(dataset_dir, f'reason_mem_labels_mmlu_{reasonmem_lang}_{split}.json')
     with open(dataset_path, 'r', encoding='utf-8') as f:
         ds_data = json.load(f)
     for entry in ds_data:
@@ -180,7 +180,7 @@ def load_dataset(ds_name, dataset_dir, sample_num=3000, split='test', reasonmem_
         ds_data = random.sample(ds_data, sample_num)
 
   elif ds_name == 'BloomTaxo':
-    dataset_path = bloom_taxo_path(dataset_dir, reasonmem_lang)
+    dataset_path = bloom_taxo_path(dataset_dir, reasonmem_lang, split)
     with open(dataset_path, 'r', encoding='utf-8') as f:
         ds_data = json.load(f)
     for entry in ds_data:
